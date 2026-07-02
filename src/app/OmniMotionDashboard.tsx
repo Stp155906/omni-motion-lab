@@ -4,7 +4,9 @@ import { useState, type ChangeEvent, type DragEvent } from "react";
 import {
   ArrowUpRight,
   Check,
+  Download,
   FileText,
+  LoaderCircle,
   Menu,
   Play,
   SlidersHorizontal,
@@ -30,6 +32,22 @@ const csvMappings = [
   { label: "Duration", value: "duration_seconds", apiParam: "duration" },
 ];
 
+type BatchResult = {
+  index: number;
+  storybeat: string;
+  status: "payload_ready" | "completed" | "failed";
+  videoUrl?: string;
+  downloadName?: string;
+  interactionId?: string;
+  error?: string;
+  payload: {
+    input: string;
+    metadata: {
+      template_id: string;
+    };
+  };
+};
+
 export function OmniMotionDashboard() {
   const [selectedMotionId, setSelectedMotionId] = useState(
     directorMotionTemplates[0].id,
@@ -38,6 +56,11 @@ export function OmniMotionDashboard() {
     animatorStyleTemplates[0].id,
   );
   const [scriptFileName, setScriptFileName] = useState("");
+  const [scriptText, setScriptText] = useState("");
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
+  const [batchMode, setBatchMode] = useState("");
+  const [generationError, setGenerationError] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedMotion =
     directorMotionTemplates.find((template) => template.id === selectedMotionId) ??
@@ -46,28 +69,71 @@ export function OmniMotionDashboard() {
     animatorStyleTemplates.find((template) => template.id === selectedStyleId) ??
     animatorStyleTemplates[0];
 
-  function handleFile(file?: File) {
+  async function handleFile(file?: File) {
     if (!file) return;
 
     setScriptFileName(file.name);
+    setScriptText(await file.text());
+    setBatchResults([]);
+    setGenerationError("");
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    handleFile(event.target.files?.[0]);
+    void handleFile(event.target.files?.[0]);
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
-    handleFile(event.dataTransfer.files?.[0]);
+    void handleFile(event.dataTransfer.files?.[0]);
   }
 
-  function handleGenerateBatch() {
-    console.log("Generate Batch via Omniflash API", {
-      selectedMotion,
-      selectedStyle,
-      scriptFileName,
-      csvMappings,
-    });
+  async function handleGenerateBatch() {
+    setGenerationError("");
+    setBatchResults([]);
+
+    if (!scriptText.trim()) {
+      setGenerationError("Upload a .CSV or .TXT storybeat script first.");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch("/api/omniflash/batch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          motionTemplateId: selectedMotion.id,
+          styleTemplateId: selectedStyle.id,
+          csvText: scriptText,
+        }),
+      });
+      const data = (await response.json()) as {
+        mode?: string;
+        message?: string;
+        error?: string;
+        results?: BatchResult[];
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Batch generation failed.");
+      }
+
+      setBatchMode(data.mode ?? "");
+      setBatchResults(data.results ?? []);
+
+      if (data.message) {
+        setGenerationError(data.message);
+      }
+    } catch (error) {
+      setGenerationError(
+        error instanceof Error ? error.message : "Batch generation failed.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -142,6 +208,10 @@ export function OmniMotionDashboard() {
             selectedMotion={selectedMotion}
             selectedStyle={selectedStyle}
             scriptFileName={scriptFileName}
+            batchMode={batchMode}
+            batchResults={batchResults}
+            generationError={generationError}
+            isGenerating={isGenerating}
             onFileChange={handleFileChange}
             onDrop={handleDrop}
             onGenerateBatch={handleGenerateBatch}
@@ -291,6 +361,10 @@ function BulkScriptIngestor({
   selectedMotion,
   selectedStyle,
   scriptFileName,
+  batchMode,
+  batchResults,
+  generationError,
+  isGenerating,
   onFileChange,
   onDrop,
   onGenerateBatch,
@@ -298,6 +372,10 @@ function BulkScriptIngestor({
   selectedMotion: MotionTemplate;
   selectedStyle: MotionTemplate;
   scriptFileName: string;
+  batchMode: string;
+  batchResults: BatchResult[];
+  generationError: string;
+  isGenerating: boolean;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onDrop: (event: DragEvent<HTMLLabelElement>) => void;
   onGenerateBatch: () => void;
@@ -413,12 +491,88 @@ function BulkScriptIngestor({
         <button
           type="button"
           onClick={onGenerateBatch}
-          className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-black px-7 text-sm font-semibold text-white transition hover:bg-[#c46325]"
+          disabled={isGenerating}
+          className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-black px-7 text-sm font-semibold text-white transition hover:bg-[#c46325] disabled:cursor-wait disabled:bg-black/55"
         >
-          <WandSparkles className="h-4 w-4" />
-          Generate Batch via Omniflash API
+          {isGenerating ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+          ) : (
+            <WandSparkles className="h-4 w-4" />
+          )}
+          {isGenerating ? "Generating batch..." : "Generate Batch via Omniflash API"}
         </button>
       </div>
+
+      {generationError ? (
+        <p className="mt-4 rounded-[8px] bg-[#f0efec] px-4 py-3 text-sm font-medium text-[#8a3f16]">
+          {generationError}
+        </p>
+      ) : null}
+
+      {batchResults.length > 0 ? (
+        <div className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-2xl font-semibold tracking-normal">
+                Generated batch rows
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-[#57524c]">
+                {batchMode === "payload_preview"
+                  ? "Preview mode built the exact API payloads. Add GEMINI_API_KEY to execute real videos."
+                  : "Completed Omni Flash rows return as local downloadable MP4 files."}
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {batchResults.map((result) => (
+              <article
+                key={`${result.index}-${result.payload.metadata.template_id}`}
+                className="rounded-[8px] border border-black/10 bg-[#f0efec] p-4"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-[#8b8177]">
+                      Storybeat {result.index + 1} · {result.status}
+                    </p>
+                    <h4 className="mt-2 text-lg font-semibold leading-tight">
+                      {result.storybeat}
+                    </h4>
+                  </div>
+                  {result.videoUrl ? (
+                    <a
+                      href={result.videoUrl}
+                      download={result.downloadName}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-black text-white transition hover:bg-[#c46325]"
+                      aria-label={`Download video for storybeat ${result.index + 1}`}
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  ) : null}
+                </div>
+
+                {result.videoUrl ? (
+                  <video
+                    src={result.videoUrl}
+                    className="mt-4 aspect-[9/16] max-h-[24rem] w-full rounded-[8px] bg-black object-cover"
+                    controls
+                    playsInline
+                  />
+                ) : (
+                  <p className="mt-4 line-clamp-4 rounded-[8px] bg-white/70 p-3 font-mono text-xs leading-5 text-[#3c3731]">
+                    {result.payload.input}
+                  </p>
+                )}
+
+                {result.error ? (
+                  <p className="mt-3 text-sm font-medium text-[#8a3f16]">
+                    {result.error}
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
