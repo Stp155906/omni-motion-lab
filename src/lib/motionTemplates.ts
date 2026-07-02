@@ -133,6 +133,92 @@ export const motionTemplates: MotionTemplate[] = [
   },
 ];
 
+export const directorMotionTemplates: MotionTemplate[] = [
+  {
+    ...motionTemplates[0],
+    id: "director-macro-micro-zoom",
+    title: "Macro-Micro Zoom",
+    niche: "Portal transitions",
+    motion: "Macro-to-micro portal",
+    promptCue:
+      "Push from tactile foreground detail into a full cinematic world without a hard cut.",
+  },
+  {
+    ...motionTemplates[4],
+    id: "director-orbital-track",
+    title: "Orbital Track",
+    niche: "Reveals / hooks",
+    motion: "Orbiting camera path",
+    promptCue:
+      "Circle the subject with layered parallax while keeping the hero object locked in frame.",
+  },
+  {
+    ...motionTemplates[2],
+    id: "director-dolly-zoom",
+    title: "Dolly Zoom",
+    niche: "Tension beats",
+    motion: "Perspective compression",
+    promptCue:
+      "Move forward while the background stretches away, creating a dramatic story-beat reveal.",
+  },
+  {
+    ...motionTemplates[6],
+    id: "director-whip-pan",
+    title: "Whip Pan",
+    niche: "Fast scene changes",
+    motion: "Directional blur transition",
+    promptCue:
+      "Use a fast lateral camera sweep to hide the scene change and land on the next visual cue.",
+  },
+];
+
+export const animatorStyleTemplates: MotionTemplate[] = [
+  {
+    ...motionTemplates[5],
+    id: "animator-scrapbook-animation",
+    title: "Scrapbook Animation",
+    niche: "Mixed-media stories",
+    motion: "Tactile collage wrapper",
+    promptCue:
+      "Layer ripped paper, ink marks, tape, and hand-made annotations around the generated beat.",
+    referencePrompt:
+      "Apply a tactile scrapbook animation wrapper with static paper borders, handwritten marks, taped corners, and subtle 12fps stop-motion motion on foreground annotations.",
+  },
+  {
+    ...motionTemplates[1],
+    id: "animator-stick-figure-simplicity",
+    title: "Stick Figure Simplicity",
+    niche: "Simple explainers",
+    motion: "Minimal line-art overlay",
+    promptCue:
+      "Translate complex ideas into clean stick-figure motion with sparse labels and readable beats.",
+    referencePrompt:
+      "Render the scene with simple stick-figure characters, clean black linework, sparse labels, and white-space-first composition while preserving the original story beat.",
+  },
+  {
+    ...motionTemplates[3],
+    id: "animator-hyperrealism-cinematography",
+    title: "Hyperrealism Cinematography",
+    niche: "Premium cinematic reels",
+    motion: "Photoreal film treatment",
+    promptCue:
+      "Wrap the motion in lens-real lighting, shallow depth, practical haze, and polished color.",
+    referencePrompt:
+      "Apply a hyperreal cinematic wrapper with natural camera optics, controlled shallow depth of field, realistic lighting falloff, practical haze, and polished film color.",
+  },
+  {
+    ...motionTemplates[6],
+    id: "animator-cyberpunk-neon",
+    title: "Cyberpunk Neon",
+    niche: "Tech / future hooks",
+    motion: "Neon environment skin",
+    promptCue:
+      "Push the same beat through electric signage, reflective streets, violet-blue glow, and synth haze.",
+    referencePrompt:
+      "Apply a cyberpunk neon visual wrapper with luminous signage, reflective wet surfaces, electric accent colors, volumetric haze, and high-contrast futuristic lighting.",
+  },
+];
+
 export const templateSections: TemplateSection[] = [
   {
     id: "faceless-hooks",

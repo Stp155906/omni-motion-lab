@@ -1,0 +1,424 @@
+"use client";
+
+import { useState, type ChangeEvent, type DragEvent } from "react";
+import {
+  ArrowUpRight,
+  Check,
+  FileText,
+  Menu,
+  Play,
+  SlidersHorizontal,
+  Sparkles,
+  UploadCloud,
+  WandSparkles,
+} from "lucide-react";
+
+import {
+  animatorStyleTemplates,
+  directorMotionTemplates,
+  type MotionTemplate,
+} from "@/lib/motionTemplates";
+
+const csvMappings = [
+  { label: "Storybeat", value: "storybeat", apiParam: "storybeat" },
+  { label: "Prompt Cue", value: "prompt_cue", apiParam: "promptCue" },
+  {
+    label: "Visual Reference",
+    value: "visual_reference",
+    apiParam: "visualReference",
+  },
+  { label: "Duration", value: "duration_seconds", apiParam: "duration" },
+];
+
+export function OmniMotionDashboard() {
+  const [selectedMotionId, setSelectedMotionId] = useState(
+    directorMotionTemplates[0].id,
+  );
+  const [selectedStyleId, setSelectedStyleId] = useState(
+    animatorStyleTemplates[0].id,
+  );
+  const [scriptFileName, setScriptFileName] = useState("");
+
+  const selectedMotion =
+    directorMotionTemplates.find((template) => template.id === selectedMotionId) ??
+    directorMotionTemplates[0];
+  const selectedStyle =
+    animatorStyleTemplates.find((template) => template.id === selectedStyleId) ??
+    animatorStyleTemplates[0];
+
+  function handleFile(file?: File) {
+    if (!file) return;
+
+    setScriptFileName(file.name);
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    handleFile(event.target.files?.[0]);
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    handleFile(event.dataTransfer.files?.[0]);
+  }
+
+  function handleGenerateBatch() {
+    console.log("Generate Batch via Omniflash API", {
+      selectedMotion,
+      selectedStyle,
+      scriptFileName,
+      csvMappings,
+    });
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f2f1ef] px-3 py-4 text-[#0d0d0f] sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-[18px] bg-[#fbfbfa] px-5 pb-10 pt-6 shadow-[0_24px_90px_rgba(15,15,15,0.10)] sm:px-8 sm:pb-14 sm:pt-8 lg:px-10">
+        <nav className="flex items-center justify-between gap-4 text-sm font-medium">
+          <div className="font-semibold tracking-tight">OmniFlash</div>
+          <div className="hidden text-[#4f4b46] md:block">
+            Based in: Motion Template Lab
+          </div>
+          <div className="flex items-center gap-5">
+            <a className="hidden transition hover:text-[#b65b23] sm:block" href="#director">
+              Director
+            </a>
+            <a className="hidden transition hover:text-[#b65b23] sm:block" href="#animator">
+              Animator
+            </a>
+            <a className="hidden transition hover:text-[#b65b23] sm:block" href="#batch">
+              Batch
+            </a>
+            <a className="hidden transition hover:text-[#b65b23] md:block" href="#batch">
+              API Keys
+            </a>
+            <button
+              type="button"
+              aria-label="Open menu"
+              className="grid h-10 w-10 place-items-center rounded-full border border-black/10 transition hover:bg-black hover:text-white"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+        </nav>
+
+        <header className="mt-20 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#f0efec] px-4 py-2 text-xs font-semibold">
+              <Sparkles className="h-3.5 w-3.5 text-[#c46325]" />
+              Prompt-backed motion library
+            </div>
+            <h1 className="mt-7 max-w-5xl text-[clamp(3.1rem,8.2vw,6.7rem)] font-semibold leading-[0.94] tracking-normal">
+              Choose a motion template for every story beat
+            </h1>
+          </div>
+          <p className="max-w-sm pb-2 text-base leading-7 text-[#4f4b46] lg:justify-self-end">
+            Pair one Director motion with one Animator style, then ingest
+            storybeat scripts for bulk Omniflash generation.
+          </p>
+        </header>
+
+        <div className="mt-12 flex flex-col gap-24">
+          <TemplateCategory
+            id="director"
+            eyebrow="The Director"
+            title="Find your perfect reel motion system"
+            description="Technical camera movement recipes for controlling how every generated scene moves."
+            templates={directorMotionTemplates}
+            selectedTemplateId={selectedMotionId}
+            onSelectTemplate={setSelectedMotionId}
+          />
+
+          <TemplateCategory
+            id="animator"
+            eyebrow="The Animator"
+            title="Choose the visual style wrapper"
+            description="Aesthetic treatments that sit on top of the selected camera system and keep batches consistent."
+            templates={animatorStyleTemplates}
+            selectedTemplateId={selectedStyleId}
+            onSelectTemplate={setSelectedStyleId}
+          />
+
+          <BulkScriptIngestor
+            selectedMotion={selectedMotion}
+            selectedStyle={selectedStyle}
+            scriptFileName={scriptFileName}
+            onFileChange={handleFileChange}
+            onDrop={handleDrop}
+            onGenerateBatch={handleGenerateBatch}
+          />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function TemplateCategory({
+  id,
+  eyebrow,
+  title,
+  description,
+  templates,
+  selectedTemplateId,
+  onSelectTemplate,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  templates: MotionTemplate[];
+  selectedTemplateId: string;
+  onSelectTemplate: (templateId: string) => void;
+}) {
+  return (
+    <section id={id} aria-labelledby={`${id}-heading`}>
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+        <div>
+          <span className="inline-flex rounded-full bg-[#f0efec] px-4 py-2 text-xs font-semibold text-[#1d1a17]">
+            {eyebrow}
+          </span>
+          <h2
+            id={`${id}-heading`}
+            className="mt-7 max-w-3xl text-[clamp(2.4rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-normal"
+          >
+            {title}
+          </h2>
+        </div>
+        <div className="flex gap-2 lg:justify-end">
+          <button
+            type="button"
+            className="min-h-12 rounded-full bg-black px-6 text-sm font-semibold text-white transition hover:bg-[#c46325]"
+          >
+            See all templates
+          </button>
+          <button
+            type="button"
+            aria-label={`Open all ${eyebrow} templates`}
+            className="grid h-12 w-12 place-items-center rounded-full bg-black text-white transition hover:bg-[#c46325]"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <p className="mt-5 max-w-2xl text-base leading-7 text-[#57524c]">
+        {description}
+      </p>
+
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {templates.map((template) => (
+          <SelectableTemplateCard
+            key={template.id}
+            template={template}
+            isSelected={template.id === selectedTemplateId}
+            onSelect={() => onSelectTemplate(template.id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SelectableTemplateCard({
+  template,
+  isSelected,
+  onSelect,
+}: {
+  template: MotionTemplate;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <article
+      className={`group relative isolate overflow-hidden rounded-[8px] bg-black transition ${
+        isSelected
+          ? "ring-2 ring-[#c46325] ring-offset-4 ring-offset-[#fbfbfa]"
+          : "ring-1 ring-black/5"
+      }`}
+    >
+      <button
+        type="button"
+        aria-pressed={isSelected}
+        onClick={onSelect}
+        className="block w-full text-left"
+      >
+        <div className="aspect-[9/16]">
+          <video
+            className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+            poster={template.posterUrl}
+            src={template.videoUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/22 to-transparent" />
+
+        <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/18 px-3 py-1 text-[11px] font-semibold backdrop-blur-md">
+            <Play className="h-3 w-3 fill-white" />
+            {template.motion}
+          </div>
+          <h3 className="max-w-[15rem] text-2xl font-semibold leading-none tracking-normal">
+            {template.title}
+          </h3>
+          <p className="mt-2 line-clamp-3 text-sm leading-5 text-white/80">
+            {template.promptCue}
+          </p>
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-normal text-white/72">
+            <span className="truncate">{template.niche}</span>
+            <span className="font-mono">{template.duration}</span>
+          </div>
+        </div>
+      </button>
+
+      <span
+        className={`absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full shadow-lg transition ${
+          isSelected
+            ? "bg-[#c46325] text-white"
+            : "bg-white text-black group-hover:scale-105"
+        }`}
+        aria-hidden="true"
+      >
+        {isSelected ? <Check className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+      </span>
+    </article>
+  );
+}
+
+function BulkScriptIngestor({
+  selectedMotion,
+  selectedStyle,
+  scriptFileName,
+  onFileChange,
+  onDrop,
+  onGenerateBatch,
+}: {
+  selectedMotion: MotionTemplate;
+  selectedStyle: MotionTemplate;
+  scriptFileName: string;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onDrop: (event: DragEvent<HTMLLabelElement>) => void;
+  onGenerateBatch: () => void;
+}) {
+  return (
+    <section id="batch" aria-labelledby="batch-heading">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+        <div>
+          <span className="inline-flex rounded-full bg-[#f0efec] px-4 py-2 text-xs font-semibold text-[#1d1a17]">
+            Turboscribe Layout
+          </span>
+          <h2
+            id="batch-heading"
+            className="mt-7 max-w-3xl text-[clamp(2.4rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-normal"
+          >
+            Ingest scripts and generate in bulk
+          </h2>
+        </div>
+        <p className="max-w-sm text-base leading-7 text-[#57524c] lg:justify-self-end">
+          Drop structured storybeat scripts, map columns to Omniflash API
+          parameters, and send the whole batch with the selected motion recipe.
+        </p>
+      </div>
+
+      <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <label
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={onDrop}
+          className="flex min-h-[24rem] cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-black/18 bg-[#f0efec] px-6 py-10 text-center transition hover:border-[#c46325] hover:bg-[#ece7df]"
+        >
+          <input
+            type="file"
+            accept=".csv,.txt,text/csv,text/plain"
+            className="sr-only"
+            onChange={onFileChange}
+          />
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-black text-white">
+            <UploadCloud className="h-7 w-7" />
+          </span>
+          <span className="mt-6 text-2xl font-semibold tracking-normal">
+            {scriptFileName || "Drop .CSV or .TXT storybeat scripts"}
+          </span>
+          <span className="mt-3 max-w-md text-sm leading-6 text-[#57524c]">
+            Use rows for each storybeat, then map your prompt cue and visual
+            reference columns before generation.
+          </span>
+          <span className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-full bg-black px-6 text-sm font-semibold text-white">
+            <FileText className="h-4 w-4" />
+            Choose script file
+          </span>
+        </label>
+
+        <aside className="rounded-[8px] bg-black p-6 text-white">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-white/12">
+              <SlidersHorizontal className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="text-2xl font-semibold leading-none tracking-normal">
+                Batch configuration
+              </h3>
+              <p className="mt-2 text-sm text-white/62">
+                One motion plus one style is active.
+              </p>
+            </div>
+          </div>
+
+          <dl className="mt-8 grid gap-3 text-sm">
+            <div className="rounded-[8px] bg-white/8 p-4">
+              <dt className="text-white/55">Selected Motion</dt>
+              <dd className="mt-1 text-lg font-semibold">{selectedMotion.title}</dd>
+            </div>
+            <div className="rounded-[8px] bg-white/8 p-4">
+              <dt className="text-white/55">Selected Style</dt>
+              <dd className="mt-1 text-lg font-semibold">{selectedStyle.title}</dd>
+            </div>
+          </dl>
+
+          <div className="mt-8">
+            <h4 className="text-sm font-semibold uppercase tracking-normal text-white/70">
+              CSV to Omniflash API
+            </h4>
+            <div className="mt-4 grid gap-3">
+              {csvMappings.map((mapping) => (
+                <label
+                  key={mapping.apiParam}
+                  className="grid gap-2 rounded-[8px] border border-white/10 bg-white/6 p-3 text-sm"
+                >
+                  <span className="text-white/58">{mapping.label}</span>
+                  <select
+                    defaultValue={mapping.value}
+                    className="min-h-11 rounded-[8px] border border-white/12 bg-black px-3 text-white outline-none transition focus:border-[#c46325]"
+                    aria-label={`Map ${mapping.label}`}
+                  >
+                    <option value="storybeat">storybeat</option>
+                    <option value="prompt_cue">prompt_cue</option>
+                    <option value="visual_reference">visual_reference</option>
+                    <option value="duration_seconds">duration_seconds</option>
+                    <option value="caption">caption</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-2xl text-sm leading-6 text-[#57524c]">
+          Current recipe: {selectedMotion.title} with {selectedStyle.title},
+          ready to apply across every storybeat row.
+        </p>
+        <button
+          type="button"
+          onClick={onGenerateBatch}
+          className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-black px-7 text-sm font-semibold text-white transition hover:bg-[#c46325]"
+        >
+          <WandSparkles className="h-4 w-4" />
+          Generate Batch via Omniflash API
+        </button>
+      </div>
+    </section>
+  );
+}

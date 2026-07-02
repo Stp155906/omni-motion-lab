@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { motionTemplates, templateSections } from "./motionTemplates";
+import {
+  animatorStyleTemplates,
+  directorMotionTemplates,
+  motionTemplates,
+  templateSections,
+} from "./motionTemplates";
 
 describe("motion template examples", () => {
   it("provides OmniFlash-ready 9:16 template cards", () => {
@@ -46,5 +51,30 @@ describe("motion template examples", () => {
     expect(motionTemplates[0]?.referencePrompt).toContain(
       "colossal stone pyramid rising from granular sand dunes",
     );
+  });
+
+  it("defines the production dashboard director motion row", () => {
+    expect(directorMotionTemplates.map((template) => template.title)).toEqual([
+      "Macro-Micro Zoom",
+      "Orbital Track",
+      "Dolly Zoom",
+      "Whip Pan",
+    ]);
+    expect(directorMotionTemplates.every((template) => template.aspectRatio === "9:16"))
+      .toBe(true);
+    expect(directorMotionTemplates[0]?.videoUrl).toBe(
+      "/videos/macro-zoom-to-pyramid-transition.mp4",
+    );
+  });
+
+  it("defines the production dashboard animator style row", () => {
+    expect(animatorStyleTemplates.map((template) => template.title)).toEqual([
+      "Scrapbook Animation",
+      "Stick Figure Simplicity",
+      "Hyperrealism Cinematography",
+      "Cyberpunk Neon",
+    ]);
+    expect(animatorStyleTemplates.every((template) => template.aspectRatio === "9:16"))
+      .toBe(true);
   });
 });
