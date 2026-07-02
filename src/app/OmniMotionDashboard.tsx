@@ -274,15 +274,20 @@ function TemplateCategory({
         {description}
       </p>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {templates.map((template) => (
-          <SelectableTemplateCard
-            key={template.id}
-            template={template}
-            isSelected={template.id === selectedTemplateId}
-            onSelect={() => onSelectTemplate(template.id)}
-          />
-        ))}
+      <div
+        className="-mx-5 mt-8 overflow-x-auto overscroll-x-contain px-5 pb-5 sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10"
+        aria-label={`${eyebrow} scrollable template row`}
+      >
+        <div className="grid snap-x snap-mandatory auto-cols-[minmax(17rem,78vw)] grid-flow-col gap-3 sm:auto-cols-[minmax(18rem,42vw)] lg:auto-cols-[17.5rem] xl:auto-cols-[18rem]">
+          {templates.map((template) => (
+            <SelectableTemplateCard
+              key={template.id}
+              template={template}
+              isSelected={template.id === selectedTemplateId}
+              onSelect={() => onSelectTemplate(template.id)}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -299,7 +304,7 @@ function SelectableTemplateCard({
 }) {
   return (
     <article
-      className={`group relative isolate overflow-hidden rounded-[8px] bg-black transition ${
+      className={`group relative isolate snap-start overflow-hidden rounded-[8px] bg-black transition ${
         isSelected
           ? "ring-2 ring-[#c46325] ring-offset-4 ring-offset-[#fbfbfa]"
           : "ring-1 ring-black/5"
