@@ -49,6 +49,13 @@ export type StorybeatRow = {
   columns: Record<string, string>;
 };
 
+export type BatchPayloadPlan = {
+  motionTemplateIds: string[];
+  styleTemplateIds: string[];
+  storybeats: StorybeatRow[];
+  includeTransitions?: boolean;
+};
+
 export const omniTemplatePayloads: OmniTemplatePayload[] = [
   {
     id: "tpl_macro_zoom_sketch",
@@ -150,12 +157,14 @@ export function buildOmniFlashPayload({
   styleTemplateId,
   storybeat,
   storybeatIndex,
+  transitionPrompt,
   delivery = "inline",
 }: {
   motionTemplateId: string;
   styleTemplateId: string;
   storybeat: string;
   storybeatIndex: number;
+  transitionPrompt?: string;
   delivery?: "inline" | "uri";
 }): OmniFlashPayload {
   const motionTemplate = getTemplateById(directorMotionTemplates, motionTemplateId);
@@ -169,9 +178,13 @@ export function buildOmniFlashPayload({
       "Render as a single continuous 9:16 short-form video template.",
     ].join(" ");
 
+  const transitionText = transitionPrompt
+    ? ` Transition continuity: ${transitionPrompt}`
+    : "";
+
   return {
     model: OMNI_FLASH_MODEL,
-    input: `${cameraMotionPrompt} based on the user script: ${storybeat}.`,
+    input: `${cameraMotionPrompt} based on the user script: ${storybeat}.${transitionText}`,
     response_format: {
       type: "video",
       aspect_ratio: OMNI_FLASH_ASPECT_RATIO,
@@ -190,6 +203,32 @@ export function buildOmniFlashPayload({
       storybeat_index: storybeatIndex,
     },
   };
+}
+
+export function planBatchPayloads({
+  motionTemplateIds,
+  styleTemplateIds,
+  storybeats,
+  includeTransitions = true,
+}: BatchPayloadPlan) {
+  const motionPool = ensureTemplatePool(motionTemplateIds, "motion");
+  const stylePool = ensureTemplatePool(styleTemplateIds, "style");
+
+  return storybeats.map((storybeat, index) =>
+    buildOmniFlashPayload({
+      motionTemplateId: motionPool[index % motionPool.length],
+      styleTemplateId: stylePool[index % stylePool.length],
+      storybeat: storybeat.text,
+      storybeatIndex: storybeat.index,
+      transitionPrompt: includeTransitions
+        ? buildTransitionPrompt({
+            previousStorybeat: storybeats[index - 1]?.text,
+            currentStorybeat: storybeat.text,
+            nextStorybeat: storybeats[index + 1]?.text,
+          })
+        : undefined,
+    }),
+  );
 }
 
 export function parseStorybeatCsv(input: string): StorybeatRow[] {
@@ -234,6 +273,38 @@ function getTemplateById(templates: MotionTemplate[], templateId: string) {
   }
 
   return template;
+}
+
+function ensureTemplatePool(templateIds: string[], type: "motion" | "style") {
+  if (templateIds.length === 0) {
+    throw new Error(`Select at least one ${type} template.`);
+  }
+
+  return templateIds;
+}
+
+function buildTransitionPrompt({
+  previousStorybeat,
+  currentStorybeat,
+  nextStorybeat,
+}: {
+  previousStorybeat?: string;
+  currentStorybeat: string;
+  nextStorybeat?: string;
+}) {
+  const previousCue = previousStorybeat
+    ? `Previous scene: ${previousStorybeat}.`
+    : "Begin from a clean opening frame.";
+  const nextCue = nextStorybeat
+    ? `Next scene: ${nextStorybeat}.`
+    : "End on a clean hold frame.";
+
+  return [
+    previousCue,
+    `Current scene must clearly express: ${currentStorybeat}.`,
+    nextCue,
+    "Design the last half-second to visually motivate the next shot using matching motion direction, foreground occlusion, light sweep, object match, or camera momentum. Avoid hard cuts inside the generated clip.",
+  ].join(" ");
 }
 
 function normalizeColumn(value: string) {

@@ -48,13 +48,24 @@ type BatchResult = {
   };
 };
 
+function toggleTemplateId(currentIds: string[], templateId: string) {
+  if (currentIds.includes(templateId)) {
+    return currentIds.length === 1
+      ? currentIds
+      : currentIds.filter((currentId) => currentId !== templateId);
+  }
+
+  return [...currentIds, templateId];
+}
+
 export function OmniMotionDashboard() {
-  const [selectedMotionId, setSelectedMotionId] = useState(
+  const [selectedMotionIds, setSelectedMotionIds] = useState([
     directorMotionTemplates[0].id,
-  );
-  const [selectedStyleId, setSelectedStyleId] = useState(
+  ]);
+  const [selectedStyleIds, setSelectedStyleIds] = useState([
     animatorStyleTemplates[0].id,
-  );
+  ]);
+  const [includeTransitions, setIncludeTransitions] = useState(true);
   const [scriptFileName, setScriptFileName] = useState("");
   const [scriptText, setScriptText] = useState("");
   const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
@@ -62,12 +73,12 @@ export function OmniMotionDashboard() {
   const [generationError, setGenerationError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const selectedMotion =
-    directorMotionTemplates.find((template) => template.id === selectedMotionId) ??
-    directorMotionTemplates[0];
-  const selectedStyle =
-    animatorStyleTemplates.find((template) => template.id === selectedStyleId) ??
-    animatorStyleTemplates[0];
+  const selectedMotions = directorMotionTemplates.filter((template) =>
+    selectedMotionIds.includes(template.id),
+  );
+  const selectedStyles = animatorStyleTemplates.filter((template) =>
+    selectedStyleIds.includes(template.id),
+  );
 
   async function handleFile(file?: File) {
     if (!file) return;
@@ -105,8 +116,9 @@ export function OmniMotionDashboard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          motionTemplateId: selectedMotion.id,
-          styleTemplateId: selectedStyle.id,
+          motionTemplateIds: selectedMotionIds,
+          styleTemplateIds: selectedStyleIds,
+          includeTransitions,
           csvText: scriptText,
         }),
       });
@@ -190,8 +202,10 @@ export function OmniMotionDashboard() {
             title="Find your perfect reel motion system"
             description="Technical camera movement recipes for controlling how every generated scene moves."
             templates={directorMotionTemplates}
-            selectedTemplateId={selectedMotionId}
-            onSelectTemplate={setSelectedMotionId}
+            selectedTemplateIds={selectedMotionIds}
+            onToggleTemplate={(templateId) =>
+              setSelectedMotionIds((current) => toggleTemplateId(current, templateId))
+            }
           />
 
           <TemplateCategory
@@ -200,18 +214,22 @@ export function OmniMotionDashboard() {
             title="Choose the visual style wrapper"
             description="Aesthetic treatments that sit on top of the selected camera system and keep batches consistent."
             templates={animatorStyleTemplates}
-            selectedTemplateId={selectedStyleId}
-            onSelectTemplate={setSelectedStyleId}
+            selectedTemplateIds={selectedStyleIds}
+            onToggleTemplate={(templateId) =>
+              setSelectedStyleIds((current) => toggleTemplateId(current, templateId))
+            }
           />
 
           <BulkScriptIngestor
-            selectedMotion={selectedMotion}
-            selectedStyle={selectedStyle}
+            selectedMotions={selectedMotions}
+            selectedStyles={selectedStyles}
+            includeTransitions={includeTransitions}
             scriptFileName={scriptFileName}
             batchMode={batchMode}
             batchResults={batchResults}
             generationError={generationError}
             isGenerating={isGenerating}
+            onToggleTransitions={() => setIncludeTransitions((current) => !current)}
             onFileChange={handleFileChange}
             onDrop={handleDrop}
             onGenerateBatch={handleGenerateBatch}
@@ -228,16 +246,16 @@ function TemplateCategory({
   title,
   description,
   templates,
-  selectedTemplateId,
-  onSelectTemplate,
+  selectedTemplateIds,
+  onToggleTemplate,
 }: {
   id: string;
   eyebrow: string;
   title: string;
   description: string;
   templates: MotionTemplate[];
-  selectedTemplateId: string;
-  onSelectTemplate: (templateId: string) => void;
+  selectedTemplateIds: string[];
+  onToggleTemplate: (templateId: string) => void;
 }) {
   return (
     <section id={id} aria-labelledby={`${id}-heading`}>
@@ -283,8 +301,8 @@ function TemplateCategory({
             <SelectableTemplateCard
               key={template.id}
               template={template}
-              isSelected={template.id === selectedTemplateId}
-              onSelect={() => onSelectTemplate(template.id)}
+              isSelected={selectedTemplateIds.includes(template.id)}
+              onSelect={() => onToggleTemplate(template.id)}
             />
           ))}
         </div>
@@ -363,24 +381,28 @@ function SelectableTemplateCard({
 }
 
 function BulkScriptIngestor({
-  selectedMotion,
-  selectedStyle,
+  selectedMotions,
+  selectedStyles,
+  includeTransitions,
   scriptFileName,
   batchMode,
   batchResults,
   generationError,
   isGenerating,
+  onToggleTransitions,
   onFileChange,
   onDrop,
   onGenerateBatch,
 }: {
-  selectedMotion: MotionTemplate;
-  selectedStyle: MotionTemplate;
+  selectedMotions: MotionTemplate[];
+  selectedStyles: MotionTemplate[];
+  includeTransitions: boolean;
   scriptFileName: string;
   batchMode: string;
   batchResults: BatchResult[];
   generationError: string;
   isGenerating: boolean;
+  onToggleTransitions: () => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onDrop: (event: DragEvent<HTMLLabelElement>) => void;
   onGenerateBatch: () => void;
@@ -450,14 +472,46 @@ function BulkScriptIngestor({
 
           <dl className="mt-8 grid gap-3 text-sm">
             <div className="rounded-[8px] bg-white/8 p-4">
-              <dt className="text-white/55">Selected Motion</dt>
-              <dd className="mt-1 text-lg font-semibold">{selectedMotion.title}</dd>
+              <dt className="text-white/55">Selected Motions</dt>
+              <dd className="mt-1 text-lg font-semibold">
+                {formatSelectedTemplates(selectedMotions)}
+              </dd>
             </div>
             <div className="rounded-[8px] bg-white/8 p-4">
-              <dt className="text-white/55">Selected Style</dt>
-              <dd className="mt-1 text-lg font-semibold">{selectedStyle.title}</dd>
+              <dt className="text-white/55">Selected Styles</dt>
+              <dd className="mt-1 text-lg font-semibold">
+                {formatSelectedTemplates(selectedStyles)}
+              </dd>
             </div>
           </dl>
+
+          <button
+            type="button"
+            onClick={onToggleTransitions}
+            aria-pressed={includeTransitions}
+            className={`mt-4 flex w-full items-center justify-between rounded-[8px] border p-4 text-left transition ${
+              includeTransitions
+                ? "border-[#c46325] bg-[#c46325]/18"
+                : "border-white/10 bg-white/6"
+            }`}
+          >
+            <span>
+              <span className="block text-sm font-semibold">
+                Transition prompts
+              </span>
+              <span className="mt-1 block text-sm leading-5 text-white/58">
+                Add previous and next storybeat context so each scene is built
+                to flow into the next one.
+              </span>
+            </span>
+            <span
+              className={`ml-4 grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                includeTransitions ? "bg-[#c46325] text-white" : "bg-white/12"
+              }`}
+            >
+              {includeTransitions ? <Check className="h-4 w-4" /> : null}
+            </span>
+          </button>
 
           <div className="mt-8">
             <h4 className="text-sm font-semibold uppercase tracking-normal text-white/70">
@@ -490,8 +544,10 @@ function BulkScriptIngestor({
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-2xl text-sm leading-6 text-[#57524c]">
-          Current recipe: {selectedMotion.title} with {selectedStyle.title},
-          ready to apply across every storybeat row.
+          Current recipe pool: {selectedMotions.length} motion
+          {selectedMotions.length === 1 ? "" : "s"} with {selectedStyles.length} style
+          {selectedStyles.length === 1 ? "" : "s"}, rotated across storybeat
+          rows{includeTransitions ? " with transition continuity prompts" : ""}.
         </p>
         <button
           type="button"
@@ -580,4 +636,14 @@ function BulkScriptIngestor({
       ) : null}
     </section>
   );
+}
+
+function formatSelectedTemplates(templates: MotionTemplate[]) {
+  if (templates.length === 1) {
+    return templates[0].title;
+  }
+
+  return `${templates.length} selected: ${templates
+    .map((template) => template.title)
+    .join(", ")}`;
 }

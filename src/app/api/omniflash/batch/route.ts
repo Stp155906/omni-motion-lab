@@ -3,7 +3,7 @@ import path from "node:path";
 
 import {
   OMNI_FLASH_ENDPOINT,
-  buildOmniFlashPayload,
+  planBatchPayloads,
   parseStorybeatCsv,
   type OmniFlashPayload,
 } from "@/lib/omniPayloadBuilder";
@@ -12,7 +12,10 @@ export const runtime = "nodejs";
 
 type BatchRequest = {
   motionTemplateId?: string;
+  motionTemplateIds?: string[];
   styleTemplateId?: string;
+  styleTemplateIds?: string[];
+  includeTransitions?: boolean;
   csvText?: string;
 };
 
@@ -29,15 +32,21 @@ type BatchResult = {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as BatchRequest;
-  const motionTemplateId = body.motionTemplateId;
-  const styleTemplateId = body.styleTemplateId;
+  const motionTemplateIds = normalizeTemplateIds(
+    body.motionTemplateIds,
+    body.motionTemplateId,
+  );
+  const styleTemplateIds = normalizeTemplateIds(
+    body.styleTemplateIds,
+    body.styleTemplateId,
+  );
   const csvText = body.csvText;
 
-  if (!motionTemplateId || !styleTemplateId || !csvText?.trim()) {
+  if (motionTemplateIds.length === 0 || styleTemplateIds.length === 0 || !csvText?.trim()) {
     return Response.json(
       {
         error:
-          "motionTemplateId, styleTemplateId, and csvText are required to generate a batch.",
+          "Select at least one motion template, one style template, and upload csvText to generate a batch.",
       },
       { status: 400 },
     );
@@ -52,14 +61,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const payloads = storybeats.map((storybeat) =>
-    buildOmniFlashPayload({
-      motionTemplateId,
-      styleTemplateId,
-      storybeat: storybeat.text,
-      storybeatIndex: storybeat.index,
-    }),
-  );
+  const payloads = planBatchPayloads({
+    motionTemplateIds,
+    styleTemplateIds,
+    storybeats,
+    includeTransitions: body.includeTransitions ?? true,
+  });
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -87,6 +94,12 @@ export async function POST(request: Request) {
     mode: "executed",
     results,
   });
+}
+
+function normalizeTemplateIds(templateIds?: string[], fallbackTemplateId?: string) {
+  const ids = templateIds?.length ? templateIds : fallbackTemplateId ? [fallbackTemplateId] : [];
+
+  return [...new Set(ids.filter((id) => id.trim().length > 0))];
 }
 
 async function runBatchGenerations({

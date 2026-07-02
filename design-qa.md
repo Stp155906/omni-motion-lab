@@ -18,5 +18,7 @@ Findings:
 - Production dashboard keeps the same layout language while adding Director motion selection, Animator style selection, and a Turboscribe-style batch ingestor.
 - Desktop renders two 4-card rows with selected-state rings/checkmarks; mobile stacks cards cleanly with no horizontal overflow.
 - Bulk ingest section includes a `.CSV`/`.TXT` storybeat dropzone, selected motion/style summary, CSV-to-Omniflash parameter mapping, and the batch generation CTA.
+- Template rows now support multi-select pools so storybeats can rotate through different motion/style examples.
+- Batch prompts include optional transition continuity context from previous and next storybeats to improve scene-to-scene flow.
 
 Final result: passed

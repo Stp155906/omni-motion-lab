@@ -6,6 +6,7 @@ import {
   OMNI_FLASH_MODEL,
   buildOmniFlashPayload,
   findTemplatePayload,
+  planBatchPayloads,
   parseStorybeatCsv,
 } from "./omniPayloadBuilder";
 
@@ -62,5 +63,39 @@ describe("Omni Flash payload builder", () => {
         },
       },
     ]);
+  });
+
+  it("rotates selected template pools and adds transition context per storybeat", () => {
+    const storybeats = parseStorybeatCsv(
+      "storybeat\nOpen on the ancient symbol\nReveal the desert portal\nLand on the pyramid",
+    );
+    const payloads = planBatchPayloads({
+      motionTemplateIds: [
+        "director-macro-micro-zoom",
+        "director-dolly-zoom",
+      ],
+      styleTemplateIds: [
+        "animator-stick-figure-simplicity",
+        "animator-scrapbook-animation",
+      ],
+      storybeats,
+      includeTransitions: true,
+    });
+
+    expect(payloads.map((payload) => payload.metadata.motion_template_id)).toEqual([
+      "director-macro-micro-zoom",
+      "director-dolly-zoom",
+      "director-macro-micro-zoom",
+    ]);
+    expect(payloads.map((payload) => payload.metadata.style_template_id)).toEqual([
+      "animator-stick-figure-simplicity",
+      "animator-scrapbook-animation",
+      "animator-stick-figure-simplicity",
+    ]);
+    expect(payloads[0].input).toContain("Transition continuity:");
+    expect(payloads[0].input).toContain("Begin from a clean opening frame");
+    expect(payloads[1].input).toContain("Previous scene: Open on the ancient symbol");
+    expect(payloads[1].input).toContain("Next scene: Land on the pyramid");
+    expect(payloads[2].input).toContain("End on a clean hold frame");
   });
 });
