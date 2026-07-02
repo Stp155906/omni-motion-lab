@@ -20,5 +20,6 @@ Findings:
 - Bulk ingest section includes a `.CSV`/`.TXT` storybeat dropzone, selected motion/style summary, CSV-to-Omniflash parameter mapping, and the batch generation CTA.
 - Template rows now support multi-select pools so storybeats can rotate through different motion/style examples.
 - Batch prompts include optional transition continuity context from previous and next storybeats to improve scene-to-scene flow.
+- Uploaded timestamp-window scripts now parse into a scene-by-scene planner with per-beat Motion, Style, and Transition controls.
 
 Final result: passed

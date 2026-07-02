@@ -46,7 +46,16 @@ export type OmniFlashPayload = {
 export type StorybeatRow = {
   index: number;
   text: string;
+  startTime?: string;
+  endTime?: string;
   columns: Record<string, string>;
+};
+
+export type ScenePlanChoice = {
+  storybeatIndex: number;
+  motionTemplateId?: string;
+  styleTemplateId?: string;
+  transitionPrompt?: string;
 };
 
 export type BatchPayloadPlan = {
@@ -54,7 +63,41 @@ export type BatchPayloadPlan = {
   styleTemplateIds: string[];
   storybeats: StorybeatRow[];
   includeTransitions?: boolean;
+  scenePlans?: ScenePlanChoice[];
 };
+
+export const transitionTemplateOptions = [
+  {
+    id: "match-object",
+    title: "Object Match",
+    prompt:
+      "Use a match-object transition where the hero symbol, light source, or geometric shape aligns with the next scene.",
+  },
+  {
+    id: "foreground-wipe",
+    title: "Foreground Wipe",
+    prompt:
+      "Use parchment, shadow, smoke, or a close foreground object to wipe the frame into the next scene.",
+  },
+  {
+    id: "light-sweep",
+    title: "Light Sweep",
+    prompt:
+      "Use a warm gold light sweep that crosses the lens and motivates the next shot direction.",
+  },
+  {
+    id: "camera-momentum",
+    title: "Camera Momentum",
+    prompt:
+      "Carry the camera direction, speed, and parallax momentum into the next storybeat.",
+  },
+  {
+    id: "portal-push",
+    title: "Portal Push",
+    prompt:
+      "Push through a dark opening, eye, doorway, glyph, or glowing symbol as a portal into the next scene.",
+  },
+];
 
 export const omniTemplatePayloads: OmniTemplatePayload[] = [
   {
@@ -210,14 +253,21 @@ export function planBatchPayloads({
   styleTemplateIds,
   storybeats,
   includeTransitions = true,
+  scenePlans = [],
 }: BatchPayloadPlan) {
   const motionPool = ensureTemplatePool(motionTemplateIds, "motion");
   const stylePool = ensureTemplatePool(styleTemplateIds, "style");
+  const scenePlanByIndex = new Map(
+    scenePlans.map((scenePlan) => [scenePlan.storybeatIndex, scenePlan]),
+  );
 
-  return storybeats.map((storybeat, index) =>
-    buildOmniFlashPayload({
-      motionTemplateId: motionPool[index % motionPool.length],
-      styleTemplateId: stylePool[index % stylePool.length],
+  return storybeats.map((storybeat, index) => {
+    const scenePlan = scenePlanByIndex.get(storybeat.index);
+
+    return buildOmniFlashPayload({
+      motionTemplateId:
+        scenePlan?.motionTemplateId ?? motionPool[index % motionPool.length],
+      styleTemplateId: scenePlan?.styleTemplateId ?? stylePool[index % stylePool.length],
       storybeat: storybeat.text,
       storybeatIndex: storybeat.index,
       transitionPrompt: includeTransitions
@@ -225,13 +275,18 @@ export function planBatchPayloads({
             previousStorybeat: storybeats[index - 1]?.text,
             currentStorybeat: storybeat.text,
             nextStorybeat: storybeats[index + 1]?.text,
+            selectedTransition: scenePlan?.transitionPrompt,
           })
         : undefined,
-    }),
-  );
+    });
+  });
 }
 
 export function parseStorybeatCsv(input: string): StorybeatRow[] {
+  if (hasTimestampBlocks(input)) {
+    return parseTimestampedStorybeats(input);
+  }
+
   const rows = parseCsvRows(input.trim());
 
   if (rows.length === 0) {
@@ -287,10 +342,12 @@ function buildTransitionPrompt({
   previousStorybeat,
   currentStorybeat,
   nextStorybeat,
+  selectedTransition,
 }: {
   previousStorybeat?: string;
   currentStorybeat: string;
   nextStorybeat?: string;
+  selectedTransition?: string;
 }) {
   const previousCue = previousStorybeat
     ? `Previous scene: ${previousStorybeat}.`
@@ -303,8 +360,11 @@ function buildTransitionPrompt({
     previousCue,
     `Current scene must clearly express: ${currentStorybeat}.`,
     nextCue,
+    selectedTransition ? `Selected transition: ${selectedTransition}` : "",
     "Design the last half-second to visually motivate the next shot using matching motion direction, foreground occlusion, light sweep, object match, or camera momentum. Avoid hard cuts inside the generated clip.",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function normalizeColumn(value: string) {
@@ -352,4 +412,67 @@ function parseCsvRows(input: string) {
   }
 
   return rows;
+}
+
+function hasTimestampBlocks(input: string) {
+  return /^\s*\*{0,2}\d{1,2}:\d{2}\*{0,2}\s*$/m.test(input);
+}
+
+function parseTimestampedStorybeats(input: string): StorybeatRow[] {
+  const lines = input.split(/\r?\n/);
+  const blocks: Array<{ startTime: string; lines: string[] }> = [];
+  let currentBlock: { startTime: string; lines: string[] } | null = null;
+
+  for (const line of lines) {
+    const time = extractTimestamp(line);
+
+    if (time) {
+      if (currentBlock) {
+        blocks.push(currentBlock);
+      }
+      currentBlock = { startTime: time, lines: [] };
+      continue;
+    }
+
+    if (!currentBlock) continue;
+
+    const cleanedLine = line.trim();
+
+    if (!cleanedLine || cleanedLine === "---") continue;
+
+    currentBlock.lines.push(cleanedLine);
+  }
+
+  if (currentBlock) {
+    blocks.push(currentBlock);
+  }
+
+  return blocks
+    .map((block, index) => {
+      const text = block.lines.join(" ").replace(/\s+/g, " ").trim();
+      const endTime = blocks[index + 1]?.startTime;
+      const columns: Record<string, string> = {
+        storybeat: text,
+        start_time: block.startTime,
+      };
+
+      if (endTime) {
+        columns.end_time = endTime;
+      }
+
+      return {
+        index,
+        text,
+        startTime: block.startTime,
+        endTime,
+        columns,
+      };
+    })
+    .filter((row) => row.text.length > 0);
+}
+
+function extractTimestamp(line: string) {
+  const match = line.trim().match(/^\*{0,2}(\d{1,2}:\d{2})\*{0,2}$/);
+
+  return match?.[1];
 }

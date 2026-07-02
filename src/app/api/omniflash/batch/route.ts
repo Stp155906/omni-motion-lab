@@ -5,6 +5,7 @@ import {
   OMNI_FLASH_ENDPOINT,
   planBatchPayloads,
   parseStorybeatCsv,
+  type ScenePlanChoice,
   type OmniFlashPayload,
 } from "@/lib/omniPayloadBuilder";
 
@@ -16,6 +17,7 @@ type BatchRequest = {
   styleTemplateId?: string;
   styleTemplateIds?: string[];
   includeTransitions?: boolean;
+  scenePlans?: ScenePlanChoice[];
   csvText?: string;
 };
 
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
     styleTemplateIds,
     storybeats,
     includeTransitions: body.includeTransitions ?? true,
+    scenePlans: body.scenePlans ?? [],
   });
 
   const apiKey = process.env.GEMINI_API_KEY;

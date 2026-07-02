@@ -98,4 +98,72 @@ describe("Omni Flash payload builder", () => {
     expect(payloads[1].input).toContain("Next scene: Land on the pyramid");
     expect(payloads[2].input).toContain("End on a clean hold frame");
   });
+
+  it("parses timestamped reel scripts into timed storybeat windows", () => {
+    const rows = parseStorybeatCsv(`**0:00**
+
+Why are millions of people suddenly convinced...
+
+the pyramids activated?
+
+---
+
+**0:03**
+
+Not that they were built.
+
+Activated.`);
+
+    expect(rows).toEqual([
+      {
+        index: 0,
+        text: "Why are millions of people suddenly convinced... the pyramids activated?",
+        startTime: "0:00",
+        endTime: "0:03",
+        columns: {
+          storybeat: "Why are millions of people suddenly convinced... the pyramids activated?",
+          start_time: "0:00",
+          end_time: "0:03",
+        },
+      },
+      {
+        index: 1,
+        text: "Not that they were built. Activated.",
+        startTime: "0:03",
+        columns: {
+          storybeat: "Not that they were built. Activated.",
+          start_time: "0:03",
+        },
+      },
+    ]);
+  });
+
+  it("honors per-storybeat motion, style, and transition choices", () => {
+    const storybeats = parseStorybeatCsv(
+      "storybeat\nOpen on the ancient symbol\nReveal the desert portal",
+    );
+    const payloads = planBatchPayloads({
+      motionTemplateIds: ["director-macro-micro-zoom"],
+      styleTemplateIds: ["animator-scrapbook-animation"],
+      storybeats,
+      includeTransitions: true,
+      scenePlans: [
+        {
+          storybeatIndex: 1,
+          motionTemplateId: "director-dolly-zoom",
+          styleTemplateId: "animator-stick-figure-simplicity",
+          transitionPrompt:
+            "Use a torch-light wipe that carries warm gold from the first scene.",
+        },
+      ],
+    });
+
+    expect(payloads[1].metadata.motion_template_id).toBe("director-dolly-zoom");
+    expect(payloads[1].metadata.style_template_id).toBe(
+      "animator-stick-figure-simplicity",
+    );
+    expect(payloads[1].input).toContain(
+      "Use a torch-light wipe that carries warm gold from the first scene.",
+    );
+  });
 });

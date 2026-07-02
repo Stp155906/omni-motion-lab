@@ -20,6 +20,12 @@ import {
   directorMotionTemplates,
   type MotionTemplate,
 } from "@/lib/motionTemplates";
+import {
+  parseStorybeatCsv,
+  transitionTemplateOptions,
+  type ScenePlanChoice,
+  type StorybeatRow,
+} from "@/lib/omniPayloadBuilder";
 
 const csvMappings = [
   { label: "Storybeat", value: "storybeat", apiParam: "storybeat" },
@@ -48,6 +54,15 @@ type BatchResult = {
   };
 };
 
+type ScenePlanState = Record<
+  number,
+  {
+    motionTemplateId: string;
+    styleTemplateId: string;
+    transitionPrompt: string;
+  }
+>;
+
 function toggleTemplateId(currentIds: string[], templateId: string) {
   if (currentIds.includes(templateId)) {
     return currentIds.length === 1
@@ -56,6 +71,31 @@ function toggleTemplateId(currentIds: string[], templateId: string) {
   }
 
   return [...currentIds, templateId];
+}
+
+function buildDefaultScenePlans(
+  storybeats: StorybeatRow[],
+  motionTemplateIds: string[],
+  styleTemplateIds: string[],
+): ScenePlanState {
+  return Object.fromEntries(
+    storybeats.map((storybeat, index) => [
+      storybeat.index,
+      {
+        motionTemplateId: motionTemplateIds[index % motionTemplateIds.length],
+        styleTemplateId: styleTemplateIds[index % styleTemplateIds.length],
+        transitionPrompt:
+          transitionTemplateOptions[index % transitionTemplateOptions.length].prompt,
+      },
+    ]),
+  );
+}
+
+function buildScenePlanPayload(scenePlans: ScenePlanState): ScenePlanChoice[] {
+  return Object.entries(scenePlans).map(([storybeatIndex, scenePlan]) => ({
+    storybeatIndex: Number(storybeatIndex),
+    ...scenePlan,
+  }));
 }
 
 export function OmniMotionDashboard() {
@@ -68,6 +108,8 @@ export function OmniMotionDashboard() {
   const [includeTransitions, setIncludeTransitions] = useState(true);
   const [scriptFileName, setScriptFileName] = useState("");
   const [scriptText, setScriptText] = useState("");
+  const [storybeatRows, setStorybeatRows] = useState<StorybeatRow[]>([]);
+  const [scenePlans, setScenePlans] = useState<ScenePlanState>({});
   const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
   const [batchMode, setBatchMode] = useState("");
   const [generationError, setGenerationError] = useState("");
@@ -84,7 +126,12 @@ export function OmniMotionDashboard() {
     if (!file) return;
 
     setScriptFileName(file.name);
-    setScriptText(await file.text());
+    const nextScriptText = await file.text();
+    const nextStorybeats = parseStorybeatCsv(nextScriptText);
+
+    setScriptText(nextScriptText);
+    setStorybeatRows(nextStorybeats);
+    setScenePlans(buildDefaultScenePlans(nextStorybeats, selectedMotionIds, selectedStyleIds));
     setBatchResults([]);
     setGenerationError("");
   }
@@ -119,6 +166,7 @@ export function OmniMotionDashboard() {
           motionTemplateIds: selectedMotionIds,
           styleTemplateIds: selectedStyleIds,
           includeTransitions,
+          scenePlans: buildScenePlanPayload(scenePlans),
           csvText: scriptText,
         }),
       });
@@ -224,12 +272,23 @@ export function OmniMotionDashboard() {
             selectedMotions={selectedMotions}
             selectedStyles={selectedStyles}
             includeTransitions={includeTransitions}
+            storybeatRows={storybeatRows}
+            scenePlans={scenePlans}
             scriptFileName={scriptFileName}
             batchMode={batchMode}
             batchResults={batchResults}
             generationError={generationError}
             isGenerating={isGenerating}
             onToggleTransitions={() => setIncludeTransitions((current) => !current)}
+            onUpdateScenePlan={(storybeatIndex, patch) =>
+              setScenePlans((current) => ({
+                ...current,
+                [storybeatIndex]: {
+                  ...current[storybeatIndex],
+                  ...patch,
+                },
+              }))
+            }
             onFileChange={handleFileChange}
             onDrop={handleDrop}
             onGenerateBatch={handleGenerateBatch}
@@ -384,12 +443,15 @@ function BulkScriptIngestor({
   selectedMotions,
   selectedStyles,
   includeTransitions,
+  storybeatRows,
+  scenePlans,
   scriptFileName,
   batchMode,
   batchResults,
   generationError,
   isGenerating,
   onToggleTransitions,
+  onUpdateScenePlan,
   onFileChange,
   onDrop,
   onGenerateBatch,
@@ -397,12 +459,18 @@ function BulkScriptIngestor({
   selectedMotions: MotionTemplate[];
   selectedStyles: MotionTemplate[];
   includeTransitions: boolean;
+  storybeatRows: StorybeatRow[];
+  scenePlans: ScenePlanState;
   scriptFileName: string;
   batchMode: string;
   batchResults: BatchResult[];
   generationError: string;
   isGenerating: boolean;
   onToggleTransitions: () => void;
+  onUpdateScenePlan: (
+    storybeatIndex: number,
+    patch: Partial<ScenePlanState[number]>,
+  ) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onDrop: (event: DragEvent<HTMLLabelElement>) => void;
   onGenerateBatch: () => void;
@@ -542,6 +610,14 @@ function BulkScriptIngestor({
         </aside>
       </div>
 
+      {storybeatRows.length > 0 ? (
+        <ScenePlanner
+          storybeatRows={storybeatRows}
+          scenePlans={scenePlans}
+          onUpdateScenePlan={onUpdateScenePlan}
+        />
+      ) : null}
+
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-2xl text-sm leading-6 text-[#57524c]">
           Current recipe pool: {selectedMotions.length} motion
@@ -635,6 +711,133 @@ function BulkScriptIngestor({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function ScenePlanner({
+  storybeatRows,
+  scenePlans,
+  onUpdateScenePlan,
+}: {
+  storybeatRows: StorybeatRow[];
+  scenePlans: ScenePlanState;
+  onUpdateScenePlan: (
+    storybeatIndex: number,
+    patch: Partial<ScenePlanState[number]>,
+  ) => void;
+}) {
+  return (
+    <section
+      aria-labelledby="scene-planner-heading"
+      className="mt-8 rounded-[8px] border border-black/10 bg-[#f0efec] p-4 sm:p-5"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3
+            id="scene-planner-heading"
+            className="text-2xl font-semibold tracking-normal"
+          >
+            Scene-by-scene plan
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#57524c]">
+            Parsed timed storybeats become editable generation rows. Pick the
+            style, camera motion, and transition behavior for each beat.
+          </p>
+        </div>
+        <span className="rounded-full bg-black px-4 py-2 text-xs font-semibold text-white">
+          {storybeatRows.length} scenes
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {storybeatRows.map((storybeat) => {
+          const scenePlan = scenePlans[storybeat.index];
+
+          return (
+            <article
+              key={storybeat.index}
+              className="grid gap-4 rounded-[8px] bg-[#fbfbfa] p-4 lg:grid-cols-[minmax(0,1.1fr)_220px_220px_240px]"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase text-[#8b8177]">
+                  Scene {storybeat.index + 1}
+                  {storybeat.startTime ? ` · ${storybeat.startTime}` : ""}
+                  {storybeat.endTime ? `-${storybeat.endTime}` : ""}
+                </p>
+                <p className="mt-2 text-base font-semibold leading-6">
+                  {storybeat.text}
+                </p>
+              </div>
+
+              <SceneSelect
+                label="Motion"
+                value={scenePlan?.motionTemplateId}
+                onChange={(motionTemplateId) =>
+                  onUpdateScenePlan(storybeat.index, { motionTemplateId })
+                }
+                options={directorMotionTemplates.map((template) => ({
+                  label: template.title,
+                  value: template.id,
+                }))}
+              />
+
+              <SceneSelect
+                label="Style"
+                value={scenePlan?.styleTemplateId}
+                onChange={(styleTemplateId) =>
+                  onUpdateScenePlan(storybeat.index, { styleTemplateId })
+                }
+                options={animatorStyleTemplates.map((template) => ({
+                  label: template.title,
+                  value: template.id,
+                }))}
+              />
+
+              <SceneSelect
+                label="Transition"
+                value={scenePlan?.transitionPrompt}
+                onChange={(transitionPrompt) =>
+                  onUpdateScenePlan(storybeat.index, { transitionPrompt })
+                }
+                options={transitionTemplateOptions.map((transition) => ({
+                  label: transition.title,
+                  value: transition.prompt,
+                }))}
+              />
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SceneSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  options: Array<{ label: string; value: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid content-start gap-2 text-sm">
+      <span className="font-semibold text-[#57524c]">{label}</span>
+      <select
+        value={value ?? options[0]?.value}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-11 rounded-[8px] border border-black/10 bg-white px-3 text-[#0d0d0f] outline-none transition focus:border-[#c46325]"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

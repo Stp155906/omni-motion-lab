@@ -41,6 +41,21 @@ Gemini Interactions API using:
 Generated MP4 files are saved locally under `public/generated` and returned to
 the dashboard as playable/downloadable row results.
 
+Storybeat uploads can be CSV rows or timestamp-window scripts like:
+
+```text
+**0:00**
+Opening narration...
+
+---
+
+**0:03**
+Next storybeat...
+```
+
+Timestamped scripts are parsed into scene rows where you can choose a Motion,
+Style, and Transition prompt per beat before generating.
+
 ## Checks
 
 ```bash
